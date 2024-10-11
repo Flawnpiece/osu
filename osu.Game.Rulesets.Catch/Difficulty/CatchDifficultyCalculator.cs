@@ -3,8 +3,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using osu.Game.Beatmaps;
-using osu.Game.Rulesets.Catch.Beatmaps;
 using osu.Game.Rulesets.Catch.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Catch.Difficulty.Skills;
 using osu.Game.Rulesets.Catch.Mods;
@@ -19,7 +19,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty
 {
     public class CatchDifficultyCalculator : DifficultyCalculator
     {
-        private const double difficulty_multiplier = 4.59;
+        private const double star_scaling_factor = 0.153;
 
         private float halfCatcherWidth;
 
@@ -40,10 +40,10 @@ namespace osu.Game.Rulesets.Catch.Difficulty
 
             CatchDifficultyAttributes attributes = new CatchDifficultyAttributes
             {
-                StarRating = Math.Sqrt(skills[0].DifficultyValue()) * difficulty_multiplier,
+                StarRating = Math.Sqrt(skills[0].DifficultyValue()) * star_scaling_factor,
                 Mods = mods,
                 ApproachRate = preempt > 1200.0 ? -(preempt - 1800.0) / 120.0 : -(preempt - 1200.0) / 150.0 + 5.0,
-                MaxCombo = beatmap.GetMaxCombo(),
+                MaxCombo = beatmap.HitObjects.Count(h => h is Fruit) + beatmap.HitObjects.OfType<JuiceStream>().SelectMany(j => j.NestedHitObjects).Count(h => !(h is TinyDroplet)),
             };
 
             return attributes;
@@ -56,10 +56,13 @@ namespace osu.Game.Rulesets.Catch.Difficulty
             List<DifficultyHitObject> objects = new List<DifficultyHitObject>();
 
             // In 2B beatmaps, it is possible that a normal Fruit is placed in the middle of a JuiceStream.
-            foreach (var hitObject in CatchBeatmap.GetPalpableObjects(beatmap.HitObjects))
+            foreach (var hitObject in beatmap.HitObjects
+                                             .SelectMany(obj => obj is JuiceStream stream ? stream.NestedHitObjects.AsEnumerable() : new[] { obj })
+                                             .Cast<CatchHitObject>()
+                                             .OrderBy(x => x.StartTime))
             {
                 // We want to only consider fruits that contribute to the combo.
-                if (hitObject is Banana || hitObject is TinyDroplet)
+                if (hitObject is BananaShower || hitObject is TinyDroplet)
                     continue;
 
                 if (lastObject != null)
